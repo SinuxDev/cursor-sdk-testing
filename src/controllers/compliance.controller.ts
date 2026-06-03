@@ -28,6 +28,11 @@ class ComplianceController {
     ApiResponse.success(res, result, 'Compliance cases retrieved successfully');
   });
 
+  getCaseById = asyncHandler(async (req: Request, res: Response) => {
+    const complianceCase = await complianceService.getCaseById(req.params.id);
+    ApiResponse.success(res, complianceCase, 'Compliance case retrieved successfully');
+  });
+
   getRiskOverview = asyncHandler(async (_req: Request, res: Response) => {
     const result = await complianceService.getRiskOverview();
     ApiResponse.success(res, result, 'Risk overview retrieved successfully');
@@ -40,6 +45,8 @@ class ComplianceController {
 
     const createdCase = await complianceService.createCase({
       actorUserId: String(req.user._id),
+      name: req.body.name,
+      survey: req.body.survey,
       title: req.body.title,
       description: req.body.description,
       category: req.body.category,
@@ -51,6 +58,38 @@ class ComplianceController {
     });
 
     ApiResponse.created(res, createdCase, 'Compliance case created successfully');
+  });
+
+  updateCase = asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const updatedCase = await complianceService.updateCase({
+      actorUserId: String(req.user._id),
+      caseId: req.params.id,
+      name: req.body.name,
+      survey: Object.prototype.hasOwnProperty.call(req.body, 'survey')
+        ? req.body.survey
+        : undefined,
+      title: req.body.title,
+      description: req.body.description,
+      category: req.body.category,
+      severity: req.body.severity,
+      linkedUserId: Object.prototype.hasOwnProperty.call(req.body, 'linkedUserId')
+        ? req.body.linkedUserId
+        : undefined,
+      linkedEventId: Object.prototype.hasOwnProperty.call(req.body, 'linkedEventId')
+        ? req.body.linkedEventId
+        : undefined,
+      assignedAdminId: Object.prototype.hasOwnProperty.call(req.body, 'assignedAdminId')
+        ? req.body.assignedAdminId
+        : undefined,
+      dueAt: Object.prototype.hasOwnProperty.call(req.body, 'dueAt') ? req.body.dueAt : undefined,
+      reason: req.body.reason,
+    });
+
+    ApiResponse.success(res, updatedCase, 'Compliance case updated successfully');
   });
 
   updateCaseStatus = asyncHandler(async (req: Request, res: Response) => {

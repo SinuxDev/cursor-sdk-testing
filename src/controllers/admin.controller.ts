@@ -82,6 +82,7 @@ class AdminController {
         req.query.action === 'user.suspension.updated' ||
         req.query.action === 'user.parent.updated' ||
         req.query.action === 'compliance.case.created' ||
+        req.query.action === 'compliance.case.updated' ||
         req.query.action === 'compliance.case.status.updated' ||
         req.query.action === 'admin.email.campaign.sent' ||
         req.query.action === 'admin.settings.updated' ||

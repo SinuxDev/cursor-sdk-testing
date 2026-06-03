@@ -100,6 +100,96 @@ export const createOpenApiDefinition = () => {
           },
           required: ['role'],
         },
+        ComplianceCase: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+            name: { type: 'string', example: 'Acme Corp onboarding review' },
+            survey: {
+              type: 'string',
+              nullable: true,
+              example: 'vendor-risk-q1-2026',
+              description: 'Optional survey reference or identifier linked to the case',
+            },
+            title: { type: 'string', example: 'Suspicious registration spike' },
+            description: { type: 'string', example: 'Multiple accounts from same IP range' },
+            category: {
+              type: 'string',
+              enum: [
+                'account_abuse',
+                'content_policy',
+                'payment_risk',
+                'policy_violation',
+                'other',
+              ],
+            },
+            severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
+            status: {
+              type: 'string',
+              enum: ['open', 'in_review', 'actioned', 'resolved'],
+            },
+            linkedUserId: { type: 'string', nullable: true },
+            linkedEventId: { type: 'string', nullable: true },
+            assignedAdminId: { type: 'string', nullable: true },
+            createdByAdminId: { type: 'string' },
+            dueAt: { type: 'string', format: 'date-time', nullable: true },
+            resolutionNote: { type: 'string', nullable: true },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+          required: ['name', 'title', 'description', 'category', 'severity', 'status'],
+        },
+        ComplianceCaseCreate: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', minLength: 2, maxLength: 120 },
+            survey: { type: 'string', minLength: 2, maxLength: 200 },
+            title: { type: 'string', minLength: 3, maxLength: 120 },
+            description: { type: 'string', minLength: 5, maxLength: 2000 },
+            category: {
+              type: 'string',
+              enum: [
+                'account_abuse',
+                'content_policy',
+                'payment_risk',
+                'policy_violation',
+                'other',
+              ],
+            },
+            severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
+            linkedUserId: { type: 'string' },
+            linkedEventId: { type: 'string' },
+            assignedAdminId: { type: 'string' },
+            dueAt: { type: 'string', format: 'date-time' },
+          },
+          required: ['name', 'title', 'description', 'category', 'severity'],
+        },
+        ComplianceCaseUpdate: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', minLength: 2, maxLength: 120 },
+            survey: { oneOf: [{ type: 'string', minLength: 2, maxLength: 200 }, { type: 'null' }] },
+            title: { type: 'string', minLength: 3, maxLength: 120 },
+            description: { type: 'string', minLength: 5, maxLength: 2000 },
+            category: {
+              type: 'string',
+              enum: [
+                'account_abuse',
+                'content_policy',
+                'payment_risk',
+                'policy_violation',
+                'other',
+              ],
+            },
+            severity: { type: 'string', enum: ['low', 'medium', 'high', 'critical'] },
+            linkedUserId: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            linkedEventId: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            assignedAdminId: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            dueAt: { oneOf: [{ type: 'string', format: 'date-time' }, { type: 'null' }] },
+            reason: { type: 'string', minLength: 3, maxLength: 300 },
+          },
+          required: ['reason'],
+        },
         DemoRequestCreate: {
           type: 'object',
           properties: {
@@ -522,6 +612,93 @@ export const createOpenApiDefinition = () => {
           responses: {
             200: {
               description: 'Compliance cases retrieved',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ApiSuccess' },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          tags: ['Compliance'],
+          summary: 'Create compliance case (admin only)',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ComplianceCaseCreate' },
+              },
+            },
+          },
+          responses: {
+            201: {
+              description: 'Compliance case created',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ApiSuccess' },
+                },
+              },
+            },
+          },
+        },
+      },
+      [`${apiBasePath}/admin/compliance/cases/{id}`]: {
+        get: {
+          tags: ['Compliance'],
+          summary: 'Get compliance case by id (admin only)',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string' },
+            },
+          ],
+          responses: {
+            200: {
+              description: 'Compliance case retrieved',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ApiSuccess' },
+                },
+              },
+            },
+            404: {
+              description: 'Compliance case not found',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ApiError' },
+                },
+              },
+            },
+          },
+        },
+        patch: {
+          tags: ['Compliance'],
+          summary: 'Update compliance case fields (admin only)',
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'id',
+              in: 'path',
+              required: true,
+              schema: { type: 'string' },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ComplianceCaseUpdate' },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: 'Compliance case updated',
               content: {
                 'application/json': {
                   schema: { $ref: '#/components/schemas/ApiSuccess' },

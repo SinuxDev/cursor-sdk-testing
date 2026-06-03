@@ -5,6 +5,7 @@ export type AdminAuditAction =
   | 'user.suspension.updated'
   | 'user.parent.updated'
   | 'compliance.case.created'
+  | 'compliance.case.updated'
   | 'compliance.case.status.updated'
   | 'admin.email.campaign.sent'
   | 'admin.settings.updated'
@@ -42,6 +43,7 @@ const adminAuditLogSchema = new Schema<IAdminAuditLog>(
         'user.suspension.updated',
         'user.parent.updated',
         'compliance.case.created',
+        'compliance.case.updated',
         'compliance.case.status.updated',
         'admin.email.campaign.sent',
         'admin.settings.updated',

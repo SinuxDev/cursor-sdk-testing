@@ -7,6 +7,16 @@ class ComplianceCaseRepository extends BaseRepository<IComplianceCase> {
     super(ComplianceCase);
   }
 
+  async findByIdWithRelations(id: string) {
+    return this.model
+      .findById(id)
+      .populate('createdByAdminId', 'name email role')
+      .populate('assignedAdminId', 'name email role')
+      .populate('linkedUserId', 'name email role isSuspended')
+      .populate('linkedEventId', 'title status startDateTime')
+      .exec();
+  }
+
   async findWithFilters(params: {
     page: number;
     limit: number;
@@ -74,7 +84,7 @@ class ComplianceCaseRepository extends BaseRepository<IComplianceCase> {
         .find({ status: { $in: ['open', 'in_review', 'actioned'] } })
         .sort({ createdAt: -1 })
         .limit(5)
-        .select('title severity status category createdAt')
+        .select('name survey title severity status category createdAt')
         .lean()
         .exec(),
     ]);
