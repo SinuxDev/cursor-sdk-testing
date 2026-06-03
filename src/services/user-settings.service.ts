@@ -4,6 +4,7 @@ import {
   IAttendeeSettings,
   IOrganizerSettings,
   IUser,
+  IUserParentSummary,
   IUserPreferences,
 } from '../models/user.model';
 import { userRepository } from '../repositories/user.repository';
@@ -90,6 +91,23 @@ class UserSettingsService {
     emailCampaignApprovalRequired: false,
   };
 
+  private toParentSummary(
+    parent: IUser['parent'] | IUserParentSummary | undefined
+  ): { id: string; name: string; email: string; role: IUser['role'] } | null {
+    if (!parent || typeof parent !== 'object' || !('email' in parent) || !('name' in parent)) {
+      return null;
+    }
+
+    const populatedParent = parent as IUserParentSummary;
+
+    return {
+      id: String(populatedParent._id),
+      name: populatedParent.name,
+      email: populatedParent.email,
+      role: populatedParent.role,
+    };
+  }
+
   private async getActiveUser(userId: string): Promise<IUser> {
     const user = await userRepository.findById(userId);
 
@@ -105,7 +123,17 @@ class UserSettingsService {
   }
 
   async getSettingsSnapshot(userId: string) {
-    const user = await this.getActiveUser(userId);
+    const user = await userRepository.findByIdWithParent(userId);
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    if (user.isSuspended) {
+      throw new AppError('Account is suspended', 403);
+    }
+
+    const parent = this.toParentSummary(user.parent);
 
     return {
       profile: {
@@ -115,6 +143,7 @@ class UserSettingsService {
         role: user.role,
         avatar: user.avatar,
         provider: user.provider,
+        parent,
       },
       preferences: {
         ...this.defaultPreferences,

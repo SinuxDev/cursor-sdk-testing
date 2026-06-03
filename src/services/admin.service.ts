@@ -16,6 +16,7 @@ interface ListUsersParams {
   q?: string;
   role?: UserRole;
   isSuspended?: boolean;
+  parentId?: string;
 }
 
 interface UpdateRoleParams {
@@ -29,6 +30,13 @@ interface UpdateSuspensionParams {
   actorUserId: string;
   targetUserId: string;
   isSuspended: boolean;
+  reason: string;
+}
+
+interface UpdateParentParams {
+  actorUserId: string;
+  targetUserId: string;
+  parentId: string | null;
   reason: string;
 }
 
@@ -84,7 +92,51 @@ class AdminService {
       ];
     }
 
-    return userRepository.findWithPagination(filter, page, limit, { createdAt: -1 });
+    if (params.parentId) {
+      if (!mongoose.Types.ObjectId.isValid(params.parentId)) {
+        throw new AppError('Invalid parent user id', 400);
+      }
+
+      filter.parent = new mongoose.Types.ObjectId(params.parentId);
+    }
+
+    return userRepository.findWithPaginationAndParent(filter, page, limit, { createdAt: -1 });
+  }
+
+  async updateUserParent(params: UpdateParentParams): Promise<IUser> {
+    const targetUser = await userRepository.findById(params.targetUserId);
+
+    if (!targetUser) {
+      throw new AppError('Target user not found', 404);
+    }
+
+    await userRepository.assertValidParentAssignment(params.targetUserId, params.parentId);
+
+    const previousParentId = targetUser.parent ? String(targetUser.parent) : null;
+
+    targetUser.parent = params.parentId
+      ? new mongoose.Types.ObjectId(params.parentId)
+      : null;
+    await targetUser.save();
+
+    await adminAuditLogRepository.create({
+      actorUserId: new mongoose.Types.ObjectId(params.actorUserId),
+      targetUserId: new mongoose.Types.ObjectId(params.targetUserId),
+      action: 'user.parent.updated',
+      reason: params.reason.trim(),
+      metadata: {
+        previousParentId,
+        nextParentId: params.parentId,
+      },
+    });
+
+    const updatedUser = await userRepository.findByIdWithParent(params.targetUserId);
+
+    if (!updatedUser) {
+      throw new AppError('Target user not found', 404);
+    }
+
+    return updatedUser;
   }
 
   async updateUserRole(params: UpdateRoleParams): Promise<IUser> {

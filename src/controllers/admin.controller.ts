@@ -13,6 +13,7 @@ class AdminController {
       role: req.query.role as 'attendee' | 'organizer' | 'admin' | undefined,
       isSuspended:
         typeof req.query.isSuspended === 'string' ? req.query.isSuspended === 'true' : undefined,
+      parentId: typeof req.query.parentId === 'string' ? req.query.parentId : undefined,
     });
 
     ApiResponse.success(res, result, 'Users retrieved successfully');
@@ -31,6 +32,26 @@ class AdminController {
     });
 
     ApiResponse.success(res, updatedUser, 'User role updated successfully');
+  });
+
+  updateParent = asyncHandler(async (req: Request, res: Response) => {
+    if (!req.user) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const parentId =
+      req.body.parentId === null || req.body.parentId === undefined
+        ? null
+        : String(req.body.parentId);
+
+    const updatedUser = await adminService.updateUserParent({
+      actorUserId: String(req.user._id),
+      targetUserId: req.params.id,
+      parentId,
+      reason: String(req.body.reason),
+    });
+
+    ApiResponse.success(res, updatedUser, 'User parent updated successfully');
   });
 
   updateSuspension = asyncHandler(async (req: Request, res: Response) => {
@@ -59,6 +80,7 @@ class AdminController {
       action:
         req.query.action === 'user.role.updated' ||
         req.query.action === 'user.suspension.updated' ||
+        req.query.action === 'user.parent.updated' ||
         req.query.action === 'compliance.case.created' ||
         req.query.action === 'compliance.case.status.updated' ||
         req.query.action === 'admin.email.campaign.sent' ||

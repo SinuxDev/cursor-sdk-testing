@@ -30,5 +30,10 @@ router.patch(
   validateRequest(adminValidation.updateSuspension),
   adminController.updateSuspension
 );
+router.patch(
+  '/users/:id/parent',
+  validateRequest(adminValidation.updateParent),
+  adminController.updateParent
+);
 
 export default router;

@@ -56,12 +56,20 @@ export interface IAdminSettings {
   emailCampaignApprovalRequired: boolean;
 }
 
+export interface IUserParentSummary {
+  _id: mongoose.Types.ObjectId;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
 export interface IUser extends Document {
   name: string;
   email: string;
   emailCanonical: string;
   password?: string;
   role: UserRole;
+  parent?: mongoose.Types.ObjectId | null;
   avatar?: string;
   provider: AuthProvider;
   providerId?: string;
@@ -115,6 +123,11 @@ const userSchema = new Schema<IUser>(
       type: String,
       enum: ['attendee', 'organizer', 'admin'],
       default: 'attendee',
+    },
+    parent: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
     avatar: {
       type: String,
@@ -293,6 +306,7 @@ const userSchema = new Schema<IUser>(
 );
 
 userSchema.index({ provider: 1, providerId: 1 }, { sparse: true });
+userSchema.index({ parent: 1 });
 
 userSchema.pre('validate', function preValidate(next) {
   if (typeof this.email === 'string') {

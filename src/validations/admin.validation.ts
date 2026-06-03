@@ -7,6 +7,7 @@ export const adminValidation = {
     query('q').optional().trim().isLength({ min: 1, max: 120 }),
     query('role').optional().isIn(['attendee', 'organizer', 'admin']),
     query('isSuspended').optional().isIn(['true', 'false']),
+    query('parentId').optional().isMongoId().withMessage('Invalid parent user id'),
   ],
 
   updateRole: [
@@ -31,6 +32,30 @@ export const adminValidation = {
       .withMessage('Reason must be between 3 and 300 characters'),
   ],
 
+  updateParent: [
+    param('id').isMongoId().withMessage('Invalid user id'),
+    body('parentId')
+      .custom((value, { req }) => {
+        if (!Object.prototype.hasOwnProperty.call(req.body, 'parentId')) {
+          throw new Error('parentId is required');
+        }
+
+        if (value === null) {
+          return true;
+        }
+
+        if (typeof value === 'string' && /^[a-f\d]{24}$/i.test(value)) {
+          return true;
+        }
+
+        throw new Error('parentId must be a valid MongoDB id or null');
+      }),
+    body('reason')
+      .trim()
+      .isLength({ min: 3, max: 300 })
+      .withMessage('Reason must be between 3 and 300 characters'),
+  ],
+
   listAuditLogs: [
     query('page').optional().isInt({ min: 1 }).toInt(),
     query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
@@ -39,6 +64,7 @@ export const adminValidation = {
       .isIn([
         'user.role.updated',
         'user.suspension.updated',
+        'user.parent.updated',
         'compliance.case.created',
         'compliance.case.status.updated',
         'admin.email.campaign.sent',

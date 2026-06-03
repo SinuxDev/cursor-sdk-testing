@@ -445,9 +445,53 @@ export const createOpenApiDefinition = () => {
           tags: ['Admin'],
           summary: 'List and search users (admin only)',
           security: [{ bearerAuth: [] }],
+          parameters: [
+            {
+              name: 'parentId',
+              in: 'query',
+              required: false,
+              schema: { type: 'string' },
+              description: 'Filter users assigned to the given parent user id',
+            },
+          ],
           responses: {
             200: {
               description: 'Users retrieved',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/ApiSuccess' },
+                },
+              },
+            },
+          },
+        },
+      },
+      [`${apiBasePath}/admin/users/{id}/parent`]: {
+        patch: {
+          tags: ['Admin'],
+          summary: 'Assign or clear a user parent (admin only)',
+          security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    parentId: {
+                      oneOf: [{ type: 'string' }, { type: 'null' }],
+                      description: 'Parent user id, or null to clear',
+                    },
+                    reason: { type: 'string', minLength: 3, maxLength: 300 },
+                  },
+                  required: ['parentId', 'reason'],
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: 'User parent updated',
               content: {
                 'application/json': {
                   schema: { $ref: '#/components/schemas/ApiSuccess' },

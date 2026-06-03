@@ -170,7 +170,7 @@ class AuthService {
   }
 
   async getCurrentUser(userId: string): Promise<IUser> {
-    const user = await userRepository.findById(userId);
+    const user = await userRepository.findByIdWithParent(userId);
 
     if (!user) {
       throw new AppError('User not found', 404);

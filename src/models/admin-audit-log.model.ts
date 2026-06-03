@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 export type AdminAuditAction =
   | 'user.role.updated'
   | 'user.suspension.updated'
+  | 'user.parent.updated'
   | 'compliance.case.created'
   | 'compliance.case.status.updated'
   | 'admin.email.campaign.sent'
@@ -39,6 +40,7 @@ const adminAuditLogSchema = new Schema<IAdminAuditLog>(
       enum: [
         'user.role.updated',
         'user.suspension.updated',
+        'user.parent.updated',
         'compliance.case.created',
         'compliance.case.status.updated',
         'admin.email.campaign.sent',

@@ -150,9 +150,10 @@ All admin endpoints require admin authentication.
 Core admin:
 
 ```
-GET    /api/v1/admin/users                   — List/search users
+GET    /api/v1/admin/users                   — List/search users (optional `parentId` filter)
 GET    /api/v1/admin/audit-logs              — List audit logs
 PATCH  /api/v1/admin/users/:id/role          — Update user role
+PATCH  /api/v1/admin/users/:id/parent        — Assign or clear parent user
 PATCH  /api/v1/admin/users/:id/suspension    — Suspend/unsuspend user
 ```
 

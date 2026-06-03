@@ -1,6 +1,9 @@
 import { FilterQuery } from 'mongoose';
 import { BaseRepository } from './base.repository';
 import { IUser, User } from '../models/user.model';
+import { AppError } from '../utils/AppError';
+
+const PARENT_POPULATE_FIELDS = 'name email role';
 
 class UserRepository extends BaseRepository<IUser> {
   constructor() {
@@ -55,6 +58,74 @@ class UserRepository extends BaseRepository<IUser> {
       },
       { attendee: 0, organizer: 0, admin: 0 } as Record<IUser['role'], number>
     );
+  }
+
+  async findByIdWithParent(id: string): Promise<IUser | null> {
+    return this.model.findById(id).populate('parent', PARENT_POPULATE_FIELDS).exec();
+  }
+
+  async findWithPaginationAndParent(
+    filter: FilterQuery<IUser> = {},
+    page: number = 1,
+    limit: number = 10,
+    sort: Record<string, 1 | -1> = { createdAt: -1 }
+  ) {
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.model
+        .find(filter)
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .populate('parent', PARENT_POPULATE_FIELDS)
+        .exec(),
+      this.model.countDocuments(filter).exec(),
+    ]);
+
+    return {
+      data,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page * limit < total,
+        hasPrevPage: page > 1,
+      },
+    };
+  }
+
+  async assertValidParentAssignment(childUserId: string, parentUserId: string | null): Promise<void> {
+    if (!parentUserId) {
+      return;
+    }
+
+    if (childUserId === parentUserId) {
+      throw new AppError('A user cannot be their own parent', 400);
+    }
+
+    const parentUser = await this.findById(parentUserId);
+
+    if (!parentUser) {
+      throw new AppError('Parent user not found', 404);
+    }
+
+    let currentParentId = parentUser.parent ? String(parentUser.parent) : null;
+
+    while (currentParentId) {
+      if (currentParentId === childUserId) {
+        throw new AppError('Parent assignment would create a circular hierarchy', 400);
+      }
+
+      const ancestor = await this.findById(currentParentId);
+
+      if (!ancestor?.parent) {
+        break;
+      }
+
+      currentParentId = String(ancestor.parent);
+    }
   }
 }
 

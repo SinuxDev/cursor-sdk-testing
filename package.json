@@ -31,7 +31,11 @@
     "seed:admin": "ts-node src/scripts/seed-admin.ts",
     "seed:test-users": "ts-node src/scripts/seed-test-users.ts",
     "cursor:prompt": "ts-node src/scripts/cursor-prompt.ts",
-    "cursor:task": "ts-node src/scripts/cursor-task.ts"
+    "cursor:task": "ts-node src/scripts/cursor-task.ts",
+    "cursor:tests": "ts-node src/scripts/cursor-tests.ts",
+    "cursor:commit": "ts-node src/scripts/cursor-commit.ts",
+    "cursor:ship": "ts-node src/scripts/cursor-ship.ts",
+    "cursor:pr": "ts-node src/scripts/cursor-pr.ts"
   },
   "keywords": [
     "express",

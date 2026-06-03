@@ -7,6 +7,7 @@ export interface CursorSdkConfig {
   apiKey: string;
   model: string;
   cwd: string;
+  prBaseBranch: string;
 }
 
 export function getCursorSdkConfig(): CursorSdkConfig {
@@ -21,5 +22,6 @@ export function getCursorSdkConfig(): CursorSdkConfig {
     apiKey,
     model: process.env.CURSOR_MODEL?.trim() || 'composer-2.5',
     cwd: process.env.CURSOR_WORKSPACE_CWD?.trim() || CURSOR_WORKSPACE_CWD,
+    prBaseBranch: process.env.CURSOR_PR_BASE_BRANCH?.trim() || 'main',
   };
 }
