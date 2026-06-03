@@ -66,6 +66,7 @@ export const adminValidation = {
         'user.suspension.updated',
         'user.parent.updated',
         'compliance.case.created',
+        'compliance.case.updated',
         'compliance.case.status.updated',
         'admin.email.campaign.sent',
         'admin.settings.updated',

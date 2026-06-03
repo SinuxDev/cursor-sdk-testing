@@ -14,10 +14,20 @@ router.get(
   validateRequest(complianceValidation.listCases),
   complianceController.listCases
 );
+router.get(
+  '/cases/:id',
+  validateRequest(complianceValidation.getCaseById),
+  complianceController.getCaseById
+);
 router.post(
   '/cases',
   validateRequest(complianceValidation.createCase),
   complianceController.createCase
+);
+router.patch(
+  '/cases/:id',
+  validateRequest(complianceValidation.updateCase),
+  complianceController.updateCase
 );
 router.patch(
   '/cases/:id/status',

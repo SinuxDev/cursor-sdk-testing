@@ -10,6 +10,8 @@ export type ComplianceCaseCategory =
   | 'other';
 
 export interface IComplianceCase extends Document {
+  name: string;
+  survey?: string;
   title: string;
   description: string;
   category: ComplianceCaseCategory;
@@ -27,6 +29,18 @@ export interface IComplianceCase extends Document {
 
 const complianceCaseSchema = new Schema<IComplianceCase>(
   {
+    name: {
+      type: String,
+      required: [true, 'Case name is required'],
+      trim: true,
+      minlength: [2, 'Case name must be at least 2 characters'],
+      maxlength: [120, 'Case name cannot exceed 120 characters'],
+    },
+    survey: {
+      type: String,
+      trim: true,
+      maxlength: [200, 'Survey reference cannot exceed 200 characters'],
+    },
     title: {
       type: String,
       required: [true, 'Case title is required'],
@@ -90,6 +104,8 @@ const complianceCaseSchema = new Schema<IComplianceCase>(
 );
 
 complianceCaseSchema.index({ status: 1, severity: -1, createdAt: -1 });
+complianceCaseSchema.index({ name: 1, createdAt: -1 });
+complianceCaseSchema.index({ survey: 1, createdAt: -1 });
 complianceCaseSchema.index({ linkedUserId: 1, createdAt: -1 });
 complianceCaseSchema.index({ linkedEventId: 1, createdAt: -1 });
 

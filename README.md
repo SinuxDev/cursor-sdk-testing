@@ -162,7 +162,9 @@ Compliance:
 ```
 GET    /api/v1/admin/compliance/risk-overview        — Compliance risk overview
 GET    /api/v1/admin/compliance/cases                — List compliance cases
-POST   /api/v1/admin/compliance/cases                — Create compliance case
+GET    /api/v1/admin/compliance/cases/:id            — Get compliance case by id
+POST   /api/v1/admin/compliance/cases                — Create compliance case (name, survey, title, …)
+PATCH  /api/v1/admin/compliance/cases/:id            — Update case fields (name, survey, title, …)
 PATCH  /api/v1/admin/compliance/cases/:id/status     — Update case status
 ```
 
