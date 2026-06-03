@@ -1,5 +1,9 @@
 import 'dotenv/config';
-import { isCursorStartupError, runEventForgeShip } from '../lib/cursor-agent';
+import {
+  formatEventForgeShipSummary,
+  isCursorStartupError,
+  runEventForgeShip,
+} from '../lib/cursor-agent';
 import { getCursorSdkConfig } from '../config/cursor.config';
 import { printLatestCommit, printOpenPullRequest } from '../lib/git-changed-files';
 
@@ -14,33 +18,34 @@ async function main(): Promise<void> {
     console.error('Usage: npm run cursor:ship -- "<feature task>" [--no-pr]');
     console.error('Example: npm run cursor:ship -- "add RSVP limit to events"');
     console.error('');
-    console.error('Runs: implementation → tests → commit → GitHub PR (gh).');
-    console.error('Requires: gh auth login, git remote, and CURSOR_API_KEY.');
+    console.error('Cloud (default on server): VM clone + auto PR. Local: git/gh on this machine.');
+    console.error('Requires: CURSOR_API_KEY, CURSOR_GITHUB_REPO_URL when using cloud.');
     process.exit(1);
   }
 
-  const { prBaseBranch } = getCursorSdkConfig();
+  const { prBaseBranch, runtime, githubRepoUrl } = getCursorSdkConfig();
 
   process.stderr.write(`EventForge ship: ${task}\n`);
+  process.stderr.write(`Runtime: ${runtime}${runtime === 'cloud' ? ` (${githubRepoUrl})` : ''}\n`);
   if (openPr) {
     process.stderr.write(
-      `(implementation → tests → commit → pull request → base: ${prBaseBranch})\n\n`
+      runtime === 'cloud'
+        ? `(cloud: implementation → tests → finalize + auto PR → base: ${prBaseBranch})\n\n`
+        : `(implementation → tests → commit → pull request → base: ${prBaseBranch})\n\n`
     );
   } else {
     process.stderr.write('(implementation → tests → commit)\n\n');
   }
 
   try {
-    const { implementation, tests, commit, pullRequest } = await runEventForgeShip(task, {
-      openPr,
-    });
+    const result = await runEventForgeShip(task, { openPr });
     process.stdout.write('\n');
-    const prStatus = pullRequest ? `, pr: ${pullRequest.status}` : '';
-    process.stderr.write(
-      `\nDone — implementation: ${implementation.status}, tests: ${tests.status}, commit: ${commit.status}${prStatus}\n`
-    );
-    printLatestCommit();
-    printOpenPullRequest();
+    process.stderr.write(`\nDone\n${formatEventForgeShipSummary(result, openPr)}\n`);
+    if (runtime === 'local') {
+      printLatestCommit();
+      printOpenPullRequest();
+    }
+    const { implementation, tests, commit, pullRequest } = result;
     if (
       implementation.status === 'error' ||
       tests.status === 'error' ||

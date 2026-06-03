@@ -11,6 +11,7 @@ import demoRequestAdminRoutes from './demo-request-admin.routes';
 import appealRequestRoutes from './appeal-request.routes';
 import rsvpRoutes from './rsvp.routes';
 import userSettingsRoutes from './user-settings.routes';
+import telegramRoutes from './telegram.routes';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use(`/${API_VERSION}/admin/email`, adminEmailRoutes);
 router.use(`/${API_VERSION}/events`, eventRoutes);
 router.use(`/${API_VERSION}/rsvps`, rsvpRoutes);
 router.use(`/${API_VERSION}/settings`, userSettingsRoutes);
+router.use(`/${API_VERSION}/telegram`, telegramRoutes);
 
 export default router;

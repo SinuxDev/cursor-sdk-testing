@@ -35,7 +35,9 @@
     "cursor:tests": "ts-node src/scripts/cursor-tests.ts",
     "cursor:commit": "ts-node src/scripts/cursor-commit.ts",
     "cursor:ship": "ts-node src/scripts/cursor-ship.ts",
-    "cursor:pr": "ts-node src/scripts/cursor-pr.ts"
+    "cursor:pr": "ts-node src/scripts/cursor-pr.ts",
+    "telegram:poll": "ts-node src/scripts/telegram-poll.ts",
+    "telegram:webhook": "ts-node src/scripts/telegram-set-webhook.ts"
   },
   "keywords": [
     "express",

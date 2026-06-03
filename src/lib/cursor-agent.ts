@@ -8,36 +8,82 @@ import {
   type SDKMessage,
   type SettingSource,
 } from '@cursor/sdk';
-import { getCursorSdkConfig } from '../config/cursor.config';
+import { getCursorSdkConfig, type CursorRuntime } from '../config/cursor.config';
+import { extractPrUrlFromRunResults } from './cursor-run-git';
 import { getWorkspaceChangedPaths } from './git-changed-files';
 
 /** Loads `.cursor/rules`, skills, hooks, MCP, and agents from the repo. */
 export const EVENT_FORGE_PROJECT_SETTING_SOURCES: SettingSource[] = ['project'];
 
-function localAgentOptions(
-  overrides?: Partial<AgentOptions>,
-  settingSources: SettingSource[] = []
-): AgentOptions {
+export function isCloudRuntime(): boolean {
+  return getCursorSdkConfig().runtime === 'cloud';
+}
+
+function cloudRepoLine(): string {
   const config = getCursorSdkConfig();
+  return `Repository: ${config.githubRepoUrl} (base branch: ${config.prBaseBranch}). Work in the Cursor cloud VM clone.`;
+}
+
+export function buildEventForgeAgentOptions(overrides?: Partial<AgentOptions>): AgentOptions {
+  const config = getCursorSdkConfig();
+
+  if (config.runtime === 'cloud') {
+    return {
+      apiKey: config.apiKey,
+      model: { id: config.model },
+      ...overrides,
+      cloud: {
+        repos: [{ url: config.githubRepoUrl, startingRef: config.prBaseBranch }],
+        skipReviewerRequest: true,
+        ...overrides?.cloud,
+      },
+    };
+  }
+
   return {
     apiKey: config.apiKey,
     model: { id: config.model },
     ...overrides,
     local: {
       cwd: config.cwd,
-      settingSources,
+      settingSources: EVENT_FORGE_PROJECT_SETTING_SOURCES,
       ...overrides?.local,
     },
   };
 }
 
 export function buildEventForgeTaskPrompt(task: string): string {
+  const intro = isCloudRuntime()
+    ? ['Work in this EventForge backend repository (Cursor cloud agent).', cloudRepoLine()]
+    : ['Work in this EventForge repository.'];
+
   return [
-    'Work in this EventForge repository.',
+    ...intro,
     'Follow .cursor/rules and use relevant .cursor/skills for this codebase.',
     'Implement the change in the working tree (not only a plan).',
     '',
     task.trim(),
+  ].join('\n');
+}
+
+export function buildEventForgeCloudFinalizePrompt(options: {
+  featureSummary: string;
+  openPr: boolean;
+}): string {
+  const prLine = options.openPr
+    ? 'Open a GitHub PR (autoCreatePR is enabled). Use a conventional commit message.'
+    : 'Commit and push to a feature branch. Do not open a PR.';
+
+  return [
+    'Finalize the cloud agent session.',
+    cloudRepoLine(),
+    '',
+    'Requirements:',
+    '- Run targeted tests (npm run test:unit / test:integration) and fix failures.',
+    '- Commit all changes with Conventional Commits (commitlint-friendly).',
+    `- ${prLine}`,
+    '',
+    `Feature context: ${options.featureSummary.trim()}`,
   ].join('\n');
 }
 
@@ -65,6 +111,18 @@ export function buildEventForgePullRequestPrompt(
   const baseBranch = options.baseBranch?.trim() || config.prBaseBranch;
   const summary = options.featureSummary?.trim();
 
+  if (isCloudRuntime()) {
+    return [
+      'Work in this EventForge backend repository (Cursor cloud agent).',
+      cloudRepoLine(),
+      'Ensure changes are committed and pushed, then open or update the GitHub pull request.',
+      `- Base branch: ${baseBranch}`,
+      summary ? `\nFeature context:\n${summary}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
   return [
     'Work in this EventForge backend repository.',
     'Open a GitHub pull request for the work that was just committed.',
@@ -91,19 +149,26 @@ export function buildEventForgePullRequestPrompt(
 export function buildEventForgeCommitPrompt(options: EventForgeCommitTaskOptions = {}): string {
   const config = getCursorSdkConfig();
   const changedPaths =
-    options.changedPaths && options.changedPaths.length > 0
-      ? options.changedPaths
-      : getWorkspaceChangedPaths(config.cwd);
+    config.runtime === 'local'
+      ? options.changedPaths && options.changedPaths.length > 0
+        ? options.changedPaths
+        : getWorkspaceChangedPaths(config.cwd)
+      : options.changedPaths ?? [];
 
   const pathSection =
     changedPaths.length > 0
       ? changedPaths.map((p) => `- ${p}`).join('\n')
-      : '- (use git status to see all changes)';
+      : isCloudRuntime()
+        ? '- (use git status in the cloud VM)'
+        : '- (use git status to see all changes)';
 
   const summary = options.featureSummary?.trim();
+  const intro = isCloudRuntime()
+    ? ['Work in this EventForge backend repository (Cursor cloud agent).', cloudRepoLine()]
+    : ['Work in this EventForge backend repository.'];
 
   return [
-    'Work in this EventForge backend repository.',
+    ...intro,
     'Create a single git commit for the completed feature and its tests.',
     '',
     'Requirements:',
@@ -127,19 +192,27 @@ export function buildEventForgeCommitPrompt(options: EventForgeCommitTaskOptions
 export function buildEventForgeTestsPrompt(options: EventForgeTestsTaskOptions = {}): string {
   const config = getCursorSdkConfig();
   const changedPaths =
-    options.changedPaths && options.changedPaths.length > 0
-      ? options.changedPaths
-      : getWorkspaceChangedPaths(config.cwd);
+    config.runtime === 'local'
+      ? options.changedPaths && options.changedPaths.length > 0
+        ? options.changedPaths
+        : getWorkspaceChangedPaths(config.cwd)
+      : options.changedPaths ?? [];
 
-  const pathSection =
-    changedPaths.length > 0
+  const pathSection = isCloudRuntime()
+    ? changedPaths.length > 0
+      ? changedPaths.map((p) => `- ${p}`).join('\n')
+      : '- (use files changed in this cloud session for the feature)'
+    : changedPaths.length > 0
       ? changedPaths.map((p) => `- ${p}`).join('\n')
       : '- (no git changes detected; inspect recent edits under src/)';
 
   const summary = options.featureSummary?.trim();
+  const intro = isCloudRuntime()
+    ? ['Work in this EventForge backend repository (Cursor cloud agent).', cloudRepoLine()]
+    : ['Work in this EventForge backend repository.'];
 
   return [
-    'Work in this EventForge backend repository.',
+    ...intro,
     'Follow .cursor/rules and the tdd-workflow skill.',
     'Generate or update Jest tests for code that was just changed.',
     '',
@@ -157,11 +230,11 @@ export function buildEventForgeTestsPrompt(options: EventForgeTestsTaskOptions =
     .join('\n');
 }
 
-async function runEventForgeProjectTask(prompt: string): Promise<RunResult> {
-  return withLocalAgent(
-    (agent) => runLocalAgentPrompt(agent, prompt),
-    { local: { settingSources: EVENT_FORGE_PROJECT_SETTING_SOURCES } }
-  );
+async function runEventForgeProjectTask(
+  prompt: string,
+  overrides?: Partial<AgentOptions>
+): Promise<RunResult> {
+  return withEventForgeAgent((agent) => runLocalAgentPrompt(agent, prompt), overrides);
 }
 
 export async function disposeAgent(agent: SDKAgent): Promise<void> {
@@ -169,13 +242,13 @@ export async function disposeAgent(agent: SDKAgent): Promise<void> {
 }
 
 /**
- * Runs `fn` with a local Cursor agent and always disposes the handle afterward.
+ * Runs `fn` with a Cursor agent (local or cloud per config) and always disposes afterward.
  */
-export async function withLocalAgent<T>(
+export async function withEventForgeAgent<T>(
   fn: (agent: SDKAgent) => Promise<T>,
   overrides?: Partial<AgentOptions>
 ): Promise<T> {
-  const agent = await Agent.create(localAgentOptions(overrides));
+  const agent = await Agent.create(buildEventForgeAgentOptions(overrides));
   try {
     return await fn(agent);
   } finally {
@@ -183,14 +256,17 @@ export async function withLocalAgent<T>(
   }
 }
 
+/** @deprecated Use withEventForgeAgent */
+export const withLocalAgent = withEventForgeAgent;
+
 /**
- * One-shot local prompt. Creates an agent, runs the prompt, and disposes automatically.
+ * One-shot prompt. Creates an agent, runs the prompt, and disposes automatically.
  */
 export async function promptLocalAgent(
   message: string,
   overrides?: Partial<AgentOptions>
 ): Promise<RunResult> {
-  return Agent.prompt(message, localAgentOptions(overrides));
+  return Agent.prompt(message, buildEventForgeAgentOptions(overrides));
 }
 
 export function isCursorStartupError(error: unknown): error is CursorAgentError {
@@ -276,25 +352,24 @@ export interface RunEventForgeTestsAndCommitOptions extends EventForgeTestsTaskO
  */
 export async function runEventForgeTaskWithTests(task: string): Promise<EventForgeTaskWithTestsResult> {
   const config = getCursorSdkConfig();
+  const changedPaths =
+    config.runtime === 'local' ? getWorkspaceChangedPaths(config.cwd) : undefined;
 
-  return withLocalAgent(
-    async (agent) => {
-      process.stderr.write('\n--- Implementation ---\n\n');
-      const implementation = await runLocalAgentPrompt(agent, buildEventForgeTaskPrompt(task));
+  return withEventForgeAgent(async (agent) => {
+    process.stderr.write('\n--- Implementation ---\n\n');
+    const implementation = await runLocalAgentPrompt(agent, buildEventForgeTaskPrompt(task));
 
-      process.stderr.write('\n--- Tests for touched areas ---\n\n');
-      const tests = await runLocalAgentPrompt(
-        agent,
-        buildEventForgeTestsPrompt({
-          featureSummary: task,
-          changedPaths: getWorkspaceChangedPaths(config.cwd),
-        })
-      );
+    process.stderr.write('\n--- Tests for touched areas ---\n\n');
+    const tests = await runLocalAgentPrompt(
+      agent,
+      buildEventForgeTestsPrompt({
+        featureSummary: task,
+        changedPaths,
+      })
+    );
 
-      return { implementation, tests };
-    },
-    { local: { settingSources: EVENT_FORGE_PROJECT_SETTING_SOURCES } }
-  );
+    return { implementation, tests };
+  });
 }
 
 /**
@@ -306,46 +381,90 @@ export async function runEventForgeShip(
 ): Promise<EventForgeShipResult> {
   const config = getCursorSdkConfig();
   const openPr = options.openPr !== false;
-  const totalSteps = openPr ? 4 : 3;
 
-  return withLocalAgent(
-    async (agent) => {
-      process.stderr.write(`\n--- 1/${totalSteps} Implementation ---\n\n`);
-      const implementation = await runLocalAgentPrompt(agent, buildEventForgeTaskPrompt(task));
+  if (config.runtime === 'cloud') {
+    const totalSteps = 3;
+    return withEventForgeAgent(
+      async (agent) => {
+        process.stderr.write(`\n--- 1/${totalSteps} Implementation (cloud) ---\n\n`);
+        const implementation = await runLocalAgentPrompt(agent, buildEventForgeTaskPrompt(task));
 
-      const changedAfterImpl = getWorkspaceChangedPaths(config.cwd);
-
-      process.stderr.write(`\n--- 2/${totalSteps} Tests ---\n\n`);
-      const tests = await runLocalAgentPrompt(
-        agent,
-        buildEventForgeTestsPrompt({
-          featureSummary: task,
-          changedPaths: changedAfterImpl,
-        })
-      );
-
-      process.stderr.write(`\n--- 3/${totalSteps} Commit ---\n\n`);
-      const commit = await runLocalAgentPrompt(
-        agent,
-        buildEventForgeCommitPrompt({
-          featureSummary: task,
-          changedPaths: getWorkspaceChangedPaths(config.cwd),
-        })
-      );
-
-      let pullRequest: RunResult | undefined;
-      if (openPr) {
-        process.stderr.write(`\n--- 4/${totalSteps} Pull request ---\n\n`);
-        pullRequest = await runLocalAgentPrompt(
+        process.stderr.write(`\n--- 2/${totalSteps} Tests (cloud) ---\n\n`);
+        const tests = await runLocalAgentPrompt(
           agent,
-          buildEventForgePullRequestPrompt({ featureSummary: task })
+          buildEventForgeTestsPrompt({ featureSummary: task })
         );
-      }
 
-      return { implementation, tests, commit, pullRequest };
-    },
-    { local: { settingSources: EVENT_FORGE_PROJECT_SETTING_SOURCES } }
+        process.stderr.write(`\n--- 3/${totalSteps} Finalize (cloud) ---\n\n`);
+        const commit = await runLocalAgentPrompt(
+          agent,
+          buildEventForgeCloudFinalizePrompt({ featureSummary: task, openPr })
+        );
+
+        const pullRequest = openPr ? commit : undefined;
+        return { implementation, tests, commit, pullRequest };
+      },
+      { cloud: { autoCreatePR: openPr } }
+    );
+  }
+
+  const totalSteps = openPr ? 4 : 3;
+  const changedAfterImpl = getWorkspaceChangedPaths(config.cwd);
+
+  return withEventForgeAgent(async (agent) => {
+    process.stderr.write(`\n--- 1/${totalSteps} Implementation ---\n\n`);
+    const implementation = await runLocalAgentPrompt(agent, buildEventForgeTaskPrompt(task));
+
+    process.stderr.write(`\n--- 2/${totalSteps} Tests ---\n\n`);
+    const tests = await runLocalAgentPrompt(
+      agent,
+      buildEventForgeTestsPrompt({
+        featureSummary: task,
+        changedPaths: changedAfterImpl,
+      })
+    );
+
+    process.stderr.write(`\n--- 3/${totalSteps} Commit ---\n\n`);
+    const commit = await runLocalAgentPrompt(
+      agent,
+      buildEventForgeCommitPrompt({
+        featureSummary: task,
+        changedPaths: getWorkspaceChangedPaths(config.cwd),
+      })
+    );
+
+    let pullRequest: RunResult | undefined;
+    if (openPr) {
+      process.stderr.write(`\n--- 4/${totalSteps} Pull request ---\n\n`);
+      pullRequest = await runLocalAgentPrompt(
+        agent,
+        buildEventForgePullRequestPrompt({ featureSummary: task })
+      );
+    }
+
+    return { implementation, tests, commit, pullRequest };
+  });
+}
+
+export function formatEventForgeShipSummary(result: EventForgeShipResult, openPr: boolean): string {
+  const lines = [
+    `implementation: ${result.implementation.status}`,
+    `tests: ${result.tests.status}`,
+    `commit: ${result.commit.status}`,
+  ];
+  if (openPr && result.pullRequest) {
+    lines.push(`pr: ${result.pullRequest.status}`);
+  }
+  const prUrl = extractPrUrlFromRunResults(
+    result.implementation,
+    result.tests,
+    result.commit,
+    ...(result.pullRequest ? [result.pullRequest] : [])
   );
+  if (prUrl) {
+    lines.push(`pr url: ${prUrl}`);
+  }
+  return lines.join('\n');
 }
 
 /**
@@ -368,14 +487,19 @@ export async function runEventForgeTestsAndCommit(
   const openPr = options.openPr === true;
   const totalSteps = openPr ? 3 : 2;
 
-  return withLocalAgent(
+  const changedPaths =
+    config.runtime === 'local'
+      ? options.changedPaths ?? getWorkspaceChangedPaths(config.cwd)
+      : options.changedPaths;
+
+  return withEventForgeAgent(
     async (agent) => {
       process.stderr.write(`\n--- 1/${totalSteps} Tests ---\n\n`);
       const tests = await runLocalAgentPrompt(
         agent,
         buildEventForgeTestsPrompt({
           ...options,
-          changedPaths: options.changedPaths ?? getWorkspaceChangedPaths(config.cwd),
+          changedPaths,
         })
       );
 
@@ -384,7 +508,7 @@ export async function runEventForgeTestsAndCommit(
         agent,
         buildEventForgeCommitPrompt({
           featureSummary: summary,
-          changedPaths: getWorkspaceChangedPaths(config.cwd),
+          changedPaths,
         })
       );
 
@@ -399,7 +523,7 @@ export async function runEventForgeTestsAndCommit(
 
       return { tests, commit, pullRequest };
     },
-    { local: { settingSources: EVENT_FORGE_PROJECT_SETTING_SOURCES } }
+    openPr && config.runtime === 'cloud' ? { cloud: { autoCreatePR: true } } : undefined
   );
 }
 
@@ -436,4 +560,5 @@ export async function runLocalAgentPrompt(
   return result;
 }
 
+export type { CursorRuntime } from '../config/cursor.config';
 export type { Run, RunResult, SDKAgent, SDKMessage, AgentOptions, CursorAgentError };
