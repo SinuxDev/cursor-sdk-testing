@@ -8,6 +8,7 @@ class DemoRequestService {
     role: string;
     teamSize: string;
     useCase: string;
+    estimatePrice: number;
     source?: 'public-website' | 'authenticated-website';
   }) {
     return demoRequestRepository.create({

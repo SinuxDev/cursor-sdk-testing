@@ -26,6 +26,7 @@ export interface IDemoRequest extends Document {
   role: string;
   teamSize: string;
   useCase: string;
+  estimatePrice: number;
   source: DemoSource;
   status: DemoRequestStatus;
   priority: DemoRequestPriority;
@@ -84,6 +85,11 @@ const demoRequestSchema = new Schema<IDemoRequest>(
       trim: true,
       minlength: 4,
       maxlength: 180,
+    },
+    estimatePrice: {
+      type: Number,
+      required: true,
+      min: [0, 'Estimate price cannot be negative'],
     },
     source: {
       type: String,

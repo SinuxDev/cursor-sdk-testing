@@ -11,6 +11,10 @@ export const demoRequestValidation = {
     body('role').trim().isLength({ min: 2 }).withMessage('Role is required'),
     body('teamSize').trim().notEmpty().withMessage('Team size is required'),
     body('useCase').trim().isLength({ min: 4 }).withMessage('Use case is required'),
+    body('estimatePrice')
+      .isFloat({ min: 0 })
+      .withMessage('Estimate price must be a non-negative number')
+      .toFloat(),
     body('source')
       .optional()
       .isIn(['public-website', 'authenticated-website'])

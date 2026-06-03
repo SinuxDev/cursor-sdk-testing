@@ -19,6 +19,7 @@ describe('demoRequestService.create', () => {
     role: 'Operations Manager',
     teamSize: '11-50',
     useCase: 'We want to improve event planning workflow',
+    estimatePrice: 1500,
     source: 'public-website' as const,
   };
 
@@ -44,5 +45,29 @@ describe('demoRequestService.create', () => {
       priority: 'medium',
     });
     expect(result).toBe(createdRecord);
+  });
+
+  it('forwards estimatePrice to the repository unchanged', async () => {
+    const payloadWithZeroPrice = {
+      ...payload,
+      estimatePrice: 0,
+    };
+
+    mockedCreate.mockResolvedValue({
+      _id: 'demo-request-zero-price',
+      ...payloadWithZeroPrice,
+      status: 'new',
+      priority: 'medium',
+    } as never);
+
+    await demoRequestService.create(payloadWithZeroPrice);
+
+    expect(mockedCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        estimatePrice: 0,
+        status: 'new',
+        priority: 'medium',
+      })
+    );
   });
 });
