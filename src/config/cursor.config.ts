@@ -1,4 +1,5 @@
 import path from 'path';
+import { getRepositoryDefaultBranch } from '../lib/git-repo-branches';
 
 /** Repository root used as the local agent working directory. */
 export const CURSOR_WORKSPACE_CWD = path.resolve(__dirname, '../..');
@@ -18,10 +19,14 @@ export function getCursorSdkConfig(): CursorSdkConfig {
     );
   }
 
+  const cwd = process.env.CURSOR_WORKSPACE_CWD?.trim() || CURSOR_WORKSPACE_CWD;
+  const prBaseBranch =
+    process.env.CURSOR_PR_BASE_BRANCH?.trim() || getRepositoryDefaultBranch(cwd);
+
   return {
     apiKey,
     model: process.env.CURSOR_MODEL?.trim() || 'composer-2.5',
-    cwd: process.env.CURSOR_WORKSPACE_CWD?.trim() || CURSOR_WORKSPACE_CWD,
-    prBaseBranch: process.env.CURSOR_PR_BASE_BRANCH?.trim() || 'main',
+    cwd,
+    prBaseBranch,
   };
 }

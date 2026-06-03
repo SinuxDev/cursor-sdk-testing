@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { isCursorStartupError, runEventForgeShip } from '../lib/cursor-agent';
+import { getCursorSdkConfig } from '../config/cursor.config';
 import { printLatestCommit, printOpenPullRequest } from '../lib/git-changed-files';
 
 const SHIP_FLAGS = new Set(['--no-pr']);
@@ -18,12 +19,16 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const { prBaseBranch } = getCursorSdkConfig();
+
   process.stderr.write(`EventForge ship: ${task}\n`);
-  process.stderr.write(
-    openPr
-      ? '(implementation → tests → commit → pull request)\n\n'
-      : '(implementation → tests → commit)\n\n'
-  );
+  if (openPr) {
+    process.stderr.write(
+      `(implementation → tests → commit → pull request → base: ${prBaseBranch})\n\n`
+    );
+  } else {
+    process.stderr.write('(implementation → tests → commit)\n\n');
+  }
 
   try {
     const { implementation, tests, commit, pullRequest } = await runEventForgeShip(task, {

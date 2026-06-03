@@ -74,7 +74,8 @@ export function buildEventForgePullRequestPrompt(
     '- If on main/master with unpushed commits, create a feature branch first (e.g. feat/short-kebab-name).',
     '- Push the current branch: git push -u origin HEAD',
     '- Never force-push to main or master.',
-    `- Base branch: ${baseBranch}`,
+    `- Base branch: ${baseBranch} (from repo default; do not use a branch that does not exist on origin)`,
+    '- Confirm with: git ls-remote --heads origin ' + baseBranch + ' (or gh repo view --json defaultBranchRef)',
     '- Create the PR: gh pr create --base ' +
       baseBranch +
       ' --title "<conventional subject>" --body "<summary + test plan>"',
