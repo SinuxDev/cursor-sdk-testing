@@ -20,4 +20,14 @@ describe('parseTelegramInstruction', () => {
     expect(parsed.command).toBe('task');
     expect(parsed.args).toBe('fix auth bug');
   });
+
+  it('parses restart the server as deploy command', () => {
+    const parsed = parseTelegramInstruction('restart the server');
+    expect(parsed.command).toBe('restart');
+  });
+
+  it('parses /deploy alias', () => {
+    const parsed = parseTelegramInstruction('/deploy');
+    expect(parsed.command).toBe('restart');
+  });
 });

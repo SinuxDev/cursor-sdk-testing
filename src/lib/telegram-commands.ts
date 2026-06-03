@@ -5,7 +5,8 @@ export type TelegramCursorCommand =
   | 'tests'
   | 'commit'
   | 'pr'
-  | 'status';
+  | 'status'
+  | 'restart';
 
 export interface ParsedTelegramInstruction {
   command: TelegramCursorCommand;
@@ -23,12 +24,26 @@ const COMMAND_ALIASES: Record<string, TelegramCursorCommand> = {
   commit: 'commit',
   pr: 'pr',
   status: 'status',
+  restart: 'restart',
+  deploy: 'restart',
+  redeploy: 'restart',
 };
+
+const RESTART_PHRASES = [
+  /^restart(\s+the)?\s+server$/i,
+  /^restart\s+server$/i,
+  /^redeploy(\s+server)?$/i,
+  /^deploy(\s+server)?$/i,
+];
 
 export function parseTelegramInstruction(text: string): ParsedTelegramInstruction {
   const trimmed = text.trim();
   if (!trimmed) {
     return { command: 'help', args: '', noPr: false };
+  }
+
+  if (RESTART_PHRASES.some((pattern) => pattern.test(trimmed))) {
+    return { command: 'restart', args: '', noPr: false };
   }
 
   const commandMatch = trimmed.match(/^\/(\w+)(?:@\w+)?(?:\s+([\s\S]*))?$/i);
@@ -59,6 +74,9 @@ export function getTelegramHelpText(): string {
     '/commit --pr RSVP limit feature',
     '/pr',
     '/status',
+    '/restart — git pull, build, pm2 restart telegram-bot, health check',
+    '/deploy (same as /restart)',
+    'Plain text: restart the server',
     '/help',
   ].join('\n');
 }

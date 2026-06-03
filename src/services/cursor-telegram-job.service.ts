@@ -25,6 +25,7 @@ import {
   type TelegramCursorCommand,
 } from '../lib/telegram-commands';
 import { getTelegramConfig } from '../config/telegram.config';
+import { runServerDeployRestart } from './server-deploy.service';
 import { telegramService } from './telegram.service';
 import { logger } from '../utils/logger';
 
@@ -95,7 +96,13 @@ class CursorTelegramJobService {
       return;
     }
 
-    if (!parsed.args && parsed.command !== 'tests' && parsed.command !== 'commit' && parsed.command !== 'pr') {
+    const commandsWithoutArgs = new Set<TelegramCursorCommand>([
+      'tests',
+      'commit',
+      'pr',
+      'restart',
+    ]);
+    if (!parsed.args && !commandsWithoutArgs.has(parsed.command)) {
       await telegramService.sendMessage(
         chatId,
         `Missing instruction text. Example:\n/ship add RSVP limit to events`
@@ -106,7 +113,7 @@ class CursorTelegramJobService {
     if (this.getActiveJobForChat(chatId)?.status === 'running') {
       await telegramService.sendMessage(
         chatId,
-        'A Cursor job is already running for this chat. Send /status or wait for it to finish.'
+        'A job is already running for this chat. Send /status or wait for it to finish.'
       );
       return;
     }
@@ -254,6 +261,11 @@ class CursorTelegramJobService {
         const gitLine = formatRunGitSummary(result);
         return [formatRunResult('pr', result.status), gitLine || formatGitSummary()].join('\n');
       }
+      case 'restart': {
+        return runServerDeployRestart(async (message) => {
+          await telegramService.sendMessage(job.chatId, message);
+        });
+      }
       default:
         return getTelegramHelpText();
     }
@@ -261,6 +273,9 @@ class CursorTelegramJobService {
 }
 
 function summarizeInstruction(parsed: ParsedTelegramInstruction): string {
+  if (parsed.command === 'restart') {
+    return 'Server deploy: git pull → npm run build → pm2 restart → health check';
+  }
   if (parsed.command === 'ship' || parsed.command === 'task') {
     const prNote = parsed.command === 'ship' && parsed.noPr ? ' (no PR)' : '';
     return `Task: ${parsed.args}${prNote}`;
