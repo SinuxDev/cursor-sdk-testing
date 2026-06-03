@@ -1,0 +1,57 @@
+---
+description: Reference rule when implementing UI from pencil.dev (.pen) designs
+globs: "**/*.tsx,**/*.jsx,**/*.vue,**/*.pen"
+alwaysApply: false
+---
+
+# Implementing UI from Pencil.dev Designs
+
+## Context
+
+When building UI that was designed in **pencil.dev** (saved as `.pen` files), use this rule so implementation stays aligned with the design and uses Pencil’s tooling correctly.
+
+## Accessing .pen Design Data
+
+- **.pen contents are encrypted**: Read or search design content **only** via the **Pencil MCP tools**. Do not use `Read` or `Grep` on `.pen` files.
+- **Discovery**: Use `get_editor_state()` when the user has a design open; use `open_document(filePath)` to open a specific `.pen` file.
+- **Structure and content**: Use `batch_get(patterns, nodeIds)` to explore the design (screens, components, layout). Prefer one batched call over many small reads.
+- **Visual check**: Use `get_screenshot` to compare implemented UI with the design when needed.
+- **Design tokens**: Use `get_variables` to get colors, spacing, typography, and other variables from the file and mirror them in code (CSS variables, Tailwind theme, etc.).
+
+## Design-to-Code Guidelines
+
+Before or while implementing, fetch implementation guidance from Pencil:
+
+- **`get_guidelines(topic="code")`**: General rules for generating code from `.pen` files (structure, naming, mapping design to components).
+- **`get_guidelines(topic="tailwind")`**: Use when the stack uses **Tailwind v4** so markup and classes match the recommended patterns.
+- **`get_guidelines(topic="design-system")`**: Use when the design uses a design system or reusable components (e.g. SaaS/dashboard); keep component usage and hierarchy consistent.
+- **`get_guidelines(topic="web-app")`** or **`get_guidelines(topic="mobile-app")`**: Use when implementing full web or mobile app screens to follow layout and interaction patterns.
+
+Call the topic(s) that match the current task (e.g. code + tailwind for a React + Tailwind page).
+
+## Implementation Checklist
+
+1. **Confirm design source**: Identify the `.pen` file and, if needed, open it with Pencil MCP.
+2. **Extract structure**: Use `batch_get` to get the relevant nodes (page/section/component) and understand hierarchy and layout.
+3. **Apply guidelines**: Call `get_guidelines` for `code` and, if applicable, `tailwind` or `design-system` (or `web-app`/`mobile-app`) and follow the returned rules.
+4. **Sync tokens**: Use `get_variables` and align colors, spacing, radii, typography in your implementation (e.g. Tailwind config or CSS variables).
+5. **Verify visually**: Use `get_screenshot` for the designed node and compare with the built UI when fixing layout or styling.
+6. **Storybook (if present)**: After implementing components, if the project has Storybook configured, **create Storybook stories** for each new or updated component so the UI can be reviewed and verified in React Storybook.
+
+## Storybook
+
+- **When**: After all components from the `.pen` design are implemented.
+- **Check**: Look for Storybook in the project (e.g. `storybook` / `storybook dev` in `package.json` scripts, `.storybook/` directory, or `*.stories.tsx` / `*.stories.jsx` files).
+- **Requirement**: For every component created or meaningfully changed from the design, add a corresponding Storybook story (or update the existing one) so that:
+  - The component is visible and interactive in the Storybook UI.
+  - Key variants or props (e.g. with/without image, different labels, loading state) are covered where it makes sense.
+- **Location**: Place stories next to the component (e.g. `ComponentName.stories.tsx` in the same folder) or in the project’s existing Storybook structure (e.g. `*.stories.tsx` under `stories/` or feature folders).
+- **Format**: Follow the project’s existing Storybook setup (CSF2/CSF3, Meta/Story, etc.).
+
+## Critical Rules
+
+- **Never** read or parse `.pen` file contents with Read/Grep; **always** use Pencil MCP tools.
+- **Always** use `get_guidelines` for the relevant topic(s) when implementing from a pencil.dev design.
+- **Prefer** design variables from `get_variables` for colors, spacing, and typography instead of inventing values.
+- **Validate** non-trivial screens with `get_screenshot` when the design is in a `.pen` file.
+- **If the project has Storybook**: After implementing components from a Pencil design, **must** add or update Storybook stories so each component can be verified in React Storybook.
