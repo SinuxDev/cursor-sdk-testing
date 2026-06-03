@@ -330,11 +330,18 @@ export interface EventForgeTaskWithTestsResult {
 export interface EventForgeShipResult extends EventForgeTaskWithTestsResult {
   commit: RunResult;
   pullRequest?: RunResult;
+  agentId?: string;
 }
 
 export interface RunEventForgeShipOptions {
   /** When false, skip push + gh pr create (default: true). */
   openPr?: boolean;
+  /** When false, return run results even if a step status is error (Telegram). */
+  throwOnRunError?: boolean;
+  /** Disable stdout streaming (recommended for Telegram / PM2). */
+  stream?: boolean;
+  waitTimeoutMs?: number;
+  onProgress?: (message: string) => void | Promise<void>;
 }
 
 export interface EventForgeTestsAndCommitResult {
@@ -375,34 +382,96 @@ export async function runEventForgeTaskWithTests(task: string): Promise<EventFor
 /**
  * Full pipeline: implement → tests → commit → open GitHub PR (optional).
  */
+async function notifyProgress(
+  options: RunEventForgeShipOptions | undefined,
+  message: string
+): Promise<void> {
+  process.stderr.write(`${message}\n`);
+  if (options?.onProgress) {
+    await options.onProgress(message);
+  }
+}
+
+export async function fetchCloudAgentPrUrl(agentId: string): Promise<string | undefined> {
+  if (!agentId.startsWith('bc-')) {
+    return undefined;
+  }
+  const config = getCursorSdkConfig();
+  try {
+    const runs = await Agent.listRuns(agentId, {
+      apiKey: config.apiKey,
+      runtime: 'cloud',
+    });
+    for (const run of runs.items) {
+      const prUrl = extractPrUrlFromRunResults({
+        id: run.id,
+        status: 'finished',
+        git: run.git,
+      });
+      if (prUrl) {
+        return prUrl;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 export async function runEventForgeShip(
   task: string,
   options: RunEventForgeShipOptions = {}
 ): Promise<EventForgeShipResult> {
   const config = getCursorSdkConfig();
   const openPr = options.openPr !== false;
+  const promptOptions = {
+    stream: options.stream,
+    waitTimeoutMs: options.waitTimeoutMs,
+    throwOnError: options.throwOnRunError,
+  };
 
   if (config.runtime === 'cloud') {
     const totalSteps = 3;
     return withEventForgeAgent(
       async (agent) => {
+        await notifyProgress(options, `Step 1/${totalSteps}: implementation (cloud)…`);
         process.stderr.write(`\n--- 1/${totalSteps} Implementation (cloud) ---\n\n`);
-        const implementation = await runLocalAgentPrompt(agent, buildEventForgeTaskPrompt(task));
+        const implementation = await runLocalAgentPrompt(
+          agent,
+          buildEventForgeTaskPrompt(task),
+          promptOptions
+        );
+        await notifyProgress(
+          options,
+          `Step 1/${totalSteps} done (${implementation.status}).`
+        );
 
+        await notifyProgress(options, `Step 2/${totalSteps}: tests (cloud)…`);
         process.stderr.write(`\n--- 2/${totalSteps} Tests (cloud) ---\n\n`);
         const tests = await runLocalAgentPrompt(
           agent,
-          buildEventForgeTestsPrompt({ featureSummary: task })
+          buildEventForgeTestsPrompt({ featureSummary: task }),
+          promptOptions
         );
+        await notifyProgress(options, `Step 2/${totalSteps} done (${tests.status}).`);
 
+        await notifyProgress(options, `Step 3/${totalSteps}: finalize + PR (cloud)…`);
         process.stderr.write(`\n--- 3/${totalSteps} Finalize (cloud) ---\n\n`);
         const commit = await runLocalAgentPrompt(
           agent,
-          buildEventForgeCloudFinalizePrompt({ featureSummary: task, openPr })
+          buildEventForgeCloudFinalizePrompt({ featureSummary: task, openPr }),
+          promptOptions
         );
+        await notifyProgress(options, `Step 3/${totalSteps} done (${commit.status}).`);
 
         const pullRequest = openPr ? commit : undefined;
-        return { implementation, tests, commit, pullRequest };
+        return {
+          implementation,
+          tests,
+          commit,
+          pullRequest,
+          agentId: agent.agentId,
+        };
       },
       { cloud: { autoCreatePR: openPr } }
     );
@@ -442,11 +511,14 @@ export async function runEventForgeShip(
       );
     }
 
-    return { implementation, tests, commit, pullRequest };
+    return { implementation, tests, commit, pullRequest, agentId: agent.agentId };
   });
 }
 
-export function formatEventForgeShipSummary(result: EventForgeShipResult, openPr: boolean): string {
+export async function formatEventForgeShipSummary(
+  result: EventForgeShipResult,
+  openPr: boolean
+): Promise<string> {
   const lines = [
     `implementation: ${result.implementation.status}`,
     `tests: ${result.tests.status}`,
@@ -455,15 +527,23 @@ export function formatEventForgeShipSummary(result: EventForgeShipResult, openPr
   if (openPr && result.pullRequest) {
     lines.push(`pr: ${result.pullRequest.status}`);
   }
-  const prUrl = extractPrUrlFromRunResults(
+  let prUrl = extractPrUrlFromRunResults(
     result.implementation,
     result.tests,
     result.commit,
     ...(result.pullRequest ? [result.pullRequest] : [])
   );
+  if (!prUrl && result.agentId) {
+    prUrl = await fetchCloudAgentPrUrl(result.agentId);
+  }
   if (prUrl) {
     lines.push(`pr url: ${prUrl}`);
   }
+  const allOk =
+    result.implementation.status === 'finished' &&
+    result.tests.status === 'finished' &&
+    result.commit.status === 'finished';
+  lines.push(allOk ? 'status: done' : 'status: finished with warnings — check GitHub');
   return lines.join('\n');
 }
 
@@ -536,13 +616,37 @@ export async function runEventForgeCommitTask(
   return runEventForgeProjectTask(buildEventForgeCommitPrompt(options));
 }
 
+const DEFAULT_RUN_WAIT_MS = 60 * 60 * 1000;
+
+async function waitForRun(run: Run, timeoutMs: number): Promise<RunResult> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`Cursor run timed out after ${Math.round(timeoutMs / 60000)} minutes: ${run.id}`)),
+      timeoutMs
+    );
+  });
+
+  try {
+    return await Promise.race([run.wait(), timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 /**
  * Sends a prompt, optionally streams assistant text to stdout, and returns the terminal result.
  */
 export async function runLocalAgentPrompt(
   agent: SDKAgent,
   message: string,
-  options?: { stream?: boolean }
+  options?: {
+    stream?: boolean;
+    waitTimeoutMs?: number;
+    throwOnError?: boolean;
+  }
 ): Promise<RunResult> {
   const run = await agent.send(message);
   console.error(`cursor run started: agent=${agent.agentId} run=${run.id}`);
@@ -553,8 +657,8 @@ export async function runLocalAgentPrompt(
     }
   }
 
-  const result = await run.wait();
-  if (result.status === 'error') {
+  const result = await waitForRun(run, options?.waitTimeoutMs ?? DEFAULT_RUN_WAIT_MS);
+  if (result.status === 'error' && options?.throwOnError !== false) {
     throw new Error(`Cursor run failed: ${run.id}`);
   }
   return result;

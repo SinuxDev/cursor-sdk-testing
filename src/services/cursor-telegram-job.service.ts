@@ -140,12 +140,12 @@ class CursorTelegramJobService {
         `Started ${label} job ${job.id.slice(0, 8)} (${runtime})…\n${summarizeInstruction(parsed)}`
       );
 
-      const summary = await this.executeCommand(parsed);
+      const summary = await this.executeCommand(job, parsed);
       job.status = 'finished';
       job.summary = summary;
       job.finishedAt = new Date().toISOString();
 
-      await telegramService.sendMessage(job.chatId, `Finished ${label}\n\n${summary}`);
+      await telegramService.sendMessage(job.chatId, `✅ Finished ${label}\n\n${summary}`);
     } catch (error) {
       job.status = 'error';
       job.error = error instanceof Error ? error.message : String(error);
@@ -156,15 +156,41 @@ class CursorTelegramJobService {
       const hint = isCursorStartupError(error)
         ? `\nRetryable: ${error.isRetryable}`
         : '';
-      await telegramService.sendMessage(job.chatId, `Failed ${label}\n\n${job.error}${hint}`);
+      await telegramService.sendMessage(
+        job.chatId,
+        `❌ Failed ${label}\n\n${job.error}${hint}\n\nCheck GitHub for a PR that may have been opened anyway.`
+      );
     } finally {
+      if (job.status === 'running') {
+        job.status = 'error';
+        job.error = 'Job stopped without a final status (process crash or disconnect).';
+        job.finishedAt = new Date().toISOString();
+        try {
+          await telegramService.sendMessage(
+            job.chatId,
+            `⚠️ ${label} ended unexpectedly.\n\n${job.error}\nCheck pm2 logs and GitHub PRs.`
+          );
+        } catch (notifyError) {
+          logger.error('Failed to send Telegram crash notification', notifyError);
+        }
+      }
       this.chatActiveJob.delete(job.chatId);
     }
   }
 
-  private async executeCommand(parsed: ParsedTelegramInstruction): Promise<string> {
+  private async executeCommand(
+    job: CursorTelegramJob,
+    parsed: ParsedTelegramInstruction
+  ): Promise<string> {
     const { command, args, noPr } = parsed;
-    const shipOptions: RunEventForgeShipOptions = { openPr: !noPr };
+    const shipOptions: RunEventForgeShipOptions = {
+      openPr: !noPr,
+      throwOnRunError: false,
+      stream: false,
+      onProgress: async (message) => {
+        await telegramService.sendMessage(job.chatId, message);
+      },
+    };
 
     switch (command) {
       case 'ship': {

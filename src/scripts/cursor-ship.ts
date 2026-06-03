@@ -40,7 +40,8 @@ async function main(): Promise<void> {
   try {
     const result = await runEventForgeShip(task, { openPr });
     process.stdout.write('\n');
-    process.stderr.write(`\nDone\n${formatEventForgeShipSummary(result, openPr)}\n`);
+    const summary = await formatEventForgeShipSummary(result, openPr);
+    process.stderr.write(`\nDone\n${summary}\n`);
     if (runtime === 'local') {
       printLatestCommit();
       printOpenPullRequest();
