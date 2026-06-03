@@ -183,6 +183,10 @@ DELETE /api/v1/upload/delete     — Delete a file by URL
 GET    /api/v1/upload/metadata   — Get file metadata
 ```
 
+## Telegram bot (optional)
+
+An optional Telegram integration lets authorized chats send instructions that run as Cursor jobs (`/ship`, `/task`, `/tests`, `/commit`, `/pr`, `/status`). Configure `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, and optionally `TELEGRAM_ALLOWED_CHAT_IDS` in `.env` (see `.env.example`). For local dev without a public URL, set `TELEGRAM_POLLING=true` and run `npm run telegram:poll`; in production, register the webhook with `npm run telegram:webhook -- "https://your-host/api/v1/telegram/webhook/<secret>"`. Webhook endpoint: `POST /api/v1/telegram/webhook/:secret`.
+
 ## Key Environment Variables
 
 | Variable | Description | Default |
