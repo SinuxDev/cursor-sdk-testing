@@ -74,7 +74,7 @@ export function getTelegramHelpText(): string {
     '/commit --pr RSVP limit feature',
     '/pr',
     '/status',
-    '/restart — git pull, build, pm2 restart telegram-bot, health check',
+    '/restart — git pull, build, health check, then pm2 restart (on server)',
     '/deploy (same as /restart)',
     'Plain text: restart the server',
     '/help',

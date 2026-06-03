@@ -1,5 +1,8 @@
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { getCursorSdkConfig } from '../config/cursor.config';
+
+/** Delay before PM2 restarts the Telegram bot so this process can finish Telegram replies. */
+const BOT_RESTART_DELAY_MS = 2500;
 
 const MAX_OUTPUT_CHARS = 1200;
 
@@ -30,6 +33,16 @@ function pm2AppOnline(name: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Restart a PM2 app after a delay in a detached shell (safe when restarting this Node process). */
+export function schedulePm2Restart(appName: string, delayMs = BOT_RESTART_DELAY_MS): void {
+  const delaySec = Math.max(1, Math.ceil(delayMs / 1000));
+  const child = spawn('bash', ['-c', `sleep ${delaySec} && pm2 restart ${appName}`], {
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
 }
 
 function checkApiHealth(port: string): string {
@@ -65,19 +78,9 @@ export async function runServerDeployRestart(
   const buildOut = runShellStep('npm run build', cwd);
   lines.push(`build: ok\n${truncateOutput(buildOut)}`);
 
-  await progress(`3/4 pm2 restart ${botApp}…`);
-  const botRestartOut = runShellStep(`pm2 restart ${botApp}`, cwd);
-  lines.push(`pm2 ${botApp}: ok\n${truncateOutput(botRestartOut)}`);
-
-  if (pm2AppOnline(apiApp)) {
-    await progress(`3b/4 pm2 restart ${apiApp}…`);
-    const apiRestartOut = runShellStep(`pm2 restart ${apiApp}`, cwd);
-    lines.push(`pm2 ${apiApp}: ok\n${truncateOutput(apiRestartOut)}`);
-  }
-
-  await progress('4/4 health check…');
-  const botOnline = pm2AppOnline(botApp);
-  lines.push(`telegram-bot (${botApp}): ${botOnline ? 'online' : 'not online'}`);
+  await progress('3/4 health check…');
+  const botOnlineBefore = pm2AppOnline(botApp);
+  lines.push(`telegram-bot (${botApp}) before restart: ${botOnlineBefore ? 'online' : 'not online'}`);
 
   const apiOnline = pm2AppOnline(apiApp);
   if (apiOnline) {
@@ -86,6 +89,17 @@ export async function runServerDeployRestart(
   } else {
     lines.push(`API process (${apiApp}): not in pm2 (skipped health URL)`);
   }
+
+  await progress(`4/4 pm2 restart…`);
+  if (pm2AppOnline(apiApp)) {
+    const apiRestartOut = runShellStep(`pm2 restart ${apiApp}`, cwd);
+    lines.push(`pm2 ${apiApp}: ok\n${truncateOutput(apiRestartOut)}`);
+  }
+
+  schedulePm2Restart(botApp);
+  lines.push(
+    `pm2 ${botApp}: restart scheduled in ${BOT_RESTART_DELAY_MS / 1000}s (avoids killing this deploy before Telegram reply)`
+  );
 
   const head = runShellStep('git log -1 --oneline', cwd);
   lines.push(`latest commit: ${head}`);

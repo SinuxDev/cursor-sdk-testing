@@ -141,10 +141,11 @@ class CursorTelegramJobService {
     const label = parsed.command.toUpperCase();
 
     try {
-      const runtime = getCursorSdkConfig().runtime;
+      const runtimeLabel =
+        parsed.command === 'restart' ? 'server' : getCursorSdkConfig().runtime;
       await telegramService.sendMessage(
         job.chatId,
-        `Started ${label} job ${job.id.slice(0, 8)} (${runtime})…\n${summarizeInstruction(parsed)}`
+        `Started ${label} job ${job.id.slice(0, 8)} (${runtimeLabel})…\n${summarizeInstruction(parsed)}`
       );
 
       const summary = await this.executeCommand(job, parsed);
@@ -274,7 +275,7 @@ class CursorTelegramJobService {
 
 function summarizeInstruction(parsed: ParsedTelegramInstruction): string {
   if (parsed.command === 'restart') {
-    return 'Server deploy: git pull → npm run build → pm2 restart → health check';
+    return 'Server deploy: git pull → npm run build → health check → pm2 restart';
   }
   if (parsed.command === 'ship' || parsed.command === 'task') {
     const prNote = parsed.command === 'ship' && parsed.noPr ? ' (no PR)' : '';
