@@ -1,3 +1,4 @@
+import type { BulkWriteResult, DeleteResult } from 'mongodb';
 import { Model, Document, FilterQuery, UpdateQuery, QueryOptions } from 'mongoose';
 
 export interface IBaseRepository<T extends Document> {
@@ -78,7 +79,9 @@ export class BaseRepository<T extends Document> implements IBaseRepository<T> {
     return (await this.model.insertMany(data)) as unknown as T[];
   }
 
-  async bulkUpdate(updates: Array<{ filter: FilterQuery<T>; update: UpdateQuery<T> }>) {
+  async bulkUpdate(
+    updates: Array<{ filter: FilterQuery<T>; update: UpdateQuery<T> }>
+  ): Promise<BulkWriteResult> {
     const bulkOps = updates.map((item) => ({
       updateMany: {
         filter: item.filter,
@@ -89,7 +92,7 @@ export class BaseRepository<T extends Document> implements IBaseRepository<T> {
     return await this.model.bulkWrite(bulkOps);
   }
 
-  async bulkDelete(filter: FilterQuery<T>) {
+  async bulkDelete(filter: FilterQuery<T>): Promise<DeleteResult> {
     return await this.model.deleteMany(filter).exec();
   }
 }
